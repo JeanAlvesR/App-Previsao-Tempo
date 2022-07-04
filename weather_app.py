@@ -2,7 +2,7 @@ import requests
 import json
 import pprint as pt
 
-accuweatherAPIKey = 'JMXCPnfdkcPbmHyJ3EUyQ48dZe3bYZVm'
+accuweatherAPIKey = 'm2zswr8SjO4dAgWSXBNKjPcVo4S4DwHN'
 
 r = requests.get('http://www.geoplugin.net/json.gp')
 
@@ -22,6 +22,7 @@ localizationAPI = 'http://dataservice.accuweather.com/locations/v1/cities/geopos
 rGeoPosition = requests.get(localizationAPI)
 
 if(rGeoPosition.status_code!=200):
+    print(rGeoPosition.status_code)
     print('Não foi possível obter a localização')
 else:
     #só peguei o código e a cidade, estado e país
@@ -31,5 +32,19 @@ else:
 
     codGeoPositon = r2['Key']
     print('Local:',nomeLocal)
-    print('Codigo:',codGeoPositon)
 
+
+
+
+geoConditionURL = 'http://dataservice.accuweather.com/currentconditions/v1/'+codGeoPositon+'?apikey='+accuweatherAPIKey+'&language=pt-br'
+
+
+rTempLocation  = requests.get(geoConditionURL)
+
+if rTempLocation.status_code !=200:
+    print('Não foi possível conectar ao serviço de temperatura')
+else:
+    r3 = json.loads(rTempLocation.text)
+    temperature = str(r3[0]['Temperature']['Metric']['Value'])+' '+r3[0]['Temperature']['Metric']['Unit']
+    climaTexto = r3[0]['WeatherText']
+    print(temperature +' -> '+ climaTexto)
