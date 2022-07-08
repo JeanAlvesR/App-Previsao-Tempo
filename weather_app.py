@@ -1,9 +1,10 @@
 import requests
 import json
 import pprint as pt
+from datetime import date
 
 accuweatherAPIKey = 'm2zswr8SjO4dAgWSXBNKjPcVo4S4DwHN'
-
+dias_semana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 
 def pegarCoordenadas():
 
@@ -11,16 +12,21 @@ def pegarCoordenadas():
 
     if(r.status_code!=200):
         print('Não foi possível obter a localização.')
-        exit()
+        return None
     else:
-        ##json.loads converte o r.text, que é uma str, para um dicionário: chave-valor.
-        localizacao = json.loads(r.text)
-        ##print(pt.pprint(localizacao))
-        coordenadas = {}
-        coordenadas['latitude'] = localizacao['geoplugin_latitude'] 
-        coordenadas['longitude']= localizacao['geoplugin_longitude']
+        try:
+            ##json.loads converte o r.text, que é uma str, para um dicionário: chave-valor.
+            localizacao = json.loads(r.text)
+            ##print(pt.pprint(localizacao))
+            coordenadas = {}
+            coordenadas['latitude'] = localizacao['geoplugin_latitude'] 
+            coordenadas['longitude']= localizacao['geoplugin_longitude']
 
-        return coordenadas
+            return coordenadas
+
+        except:
+            return None
+
         
 def pegarCodigo(latitude, longitude):
     #Utilizando API para descobrir o código referente a latitude e longitude.
@@ -29,18 +35,19 @@ def pegarCodigo(latitude, longitude):
     rGeoPosition = requests.get(localizationAPI)
 
     if(rGeoPosition.status_code!=200):
-        print(rGeoPosition.status_code)
         print('Não foi possível obter a localização')
+        return None
     else:
-        #só peguei o código e a cidade, estado e país
-        locationResponse = json.loads(rGeoPosition.text)
-        
-        nomeLocal = locationResponse['LocalizedName'] + ', ' + locationResponse['AdministrativeArea']['LocalizedName'] + '. ' + locationResponse['Country']['LocalizedName'] +'.'
+        try:
+            #só peguei o código e a cidade, estado e país
+            locationResponse = json.loads(rGeoPosition.text)
+            nomeLocal = locationResponse['LocalizedName'] + ', ' + locationResponse['AdministrativeArea']['LocalizedName'] + '. ' + locationResponse['Country']['LocalizedName'] +'.'
 
-        codGeoPosition = locationResponse['Key']
-        infoLocal = {'nomeLocal': nomeLocal, 'codGeoPosition':codGeoPosition}
-        return infoLocal
-
+            codGeoPosition = locationResponse['Key']
+            infoLocal = {'nomeLocal': nomeLocal, 'codGeoPosition':codGeoPosition}
+            return infoLocal
+        except:
+            return None
 
 def pegarTempoAgora(codGeoPosition, nomeLocal):
 
@@ -51,21 +58,68 @@ def pegarTempoAgora(codGeoPosition, nomeLocal):
 
     if rTempLocation.status_code !=200:
         print('Não foi possível conectar ao serviço de temperatura')
+        return None
     else:
-        currentConditionResponse = json.loads(rTempLocation.text)
-        infoClima = {}
-        infoClima['temperature'] = str(currentConditionResponse[0]['Temperature']['Metric']['Value'])+' '+currentConditionResponse[0]['Temperature']['Metric']['Unit']
-        infoClima['climaTexto'] = currentConditionResponse[0]['WeatherText']
-        infoClima['nomeLocal'] = nomeLocal
+        try:
+            currentConditionResponse = json.loads(rTempLocation.text)
+            infoClima = {}
+            infoClima['temperatura'] = str(currentConditionResponse[0]['Temperature']['Metric']['Value'])+' '+currentConditionResponse[0]['Temperature']['Metric']['Unit']
+            infoClima['clima'] = currentConditionResponse[0]['WeatherText']
+            infoClima['local'] = nomeLocal
 
-        return infoClima
+            return infoClima
+
+        except:
+            return None
+
+
+def pegarClima5Dias(codigoLocal):
+    climaURL = "http://dataservice.accuweather.com/forecasts/v1/daily/5day/"+codigoLocal+"?apikey="+accuweatherAPIKey+"&language=pt-br&metric=true"
+
+    r = requests.get(climaURL)
+
+    if r.status_code!=200:
+        print("Não foi possível acessar os próximos dias")
+        return None
+
+    else:
+        climaResp = json.loads(r.text)
+        listaInfoClima = []
+        infoClima = {}
+        for i in range (5):
+            try:
+                infoClima = {}
+                infoClima['temperaturaMinima'] = str(climaResp['DailyForecasts'][i]['Temperature']['Minimum']['Value'])
+                infoClima['temperaturaMaxima'] = str(climaResp['DailyForecasts'][i]['Temperature']['Maximum']['Value'])
+                infoClima['clima'] = climaResp['DailyForecasts'][i]['Night']['IconPhrase']
+                infoClima['dia'] = dias_semana[int( date.fromtimestamp( climaResp['DailyForecasts'][i]['EpochDate']).strftime('%w'))]
+                listaInfoClima.append(infoClima)
+                
+            except:
+                print('Erro na lista de dicionário')
+        return listaInfoClima
+
 
 ## Inicio do Programa
+try:
+    coordenadas = pegarCoordenadas()
+    info = pegarCodigo(coordenadas['latitude'], coordenadas['longitude'])
+    climaHoje = pegarTempoAgora(info['codGeoPosition'], info['nomeLocal'])
+    listaInfoClima5Dias = pegarClima5Dias(info['codGeoPosition'])
 
-coordenadas = pegarCoordenadas()
+    print('Clima atual em: '+climaHoje['local'])
+    print(climaHoje['clima'])
+    print('Temperatura: '+climaHoje['temperatura'])
 
-info = pegarCodigo(coordenadas['latitude'], coordenadas['longitude'])
+    print('\n\nClima para hoje e para os próximos dias:')
+  
+    for dia in listaInfoClima5Dias:
+        print('\n'+dia['dia'])
+        print('Temperatura Máxima: '+dia['temperaturaMaxima'])
+        print('Temperatura Mínima: '+dia['temperaturaMinima'])
+        print('Clima: '+dia['clima'])
 
-clima = pegarTempoAgora(info['codGeoPosition'], info['nomeLocal'])
 
-print(pt.pprint(clima))
+
+except:
+    print('Error!')
